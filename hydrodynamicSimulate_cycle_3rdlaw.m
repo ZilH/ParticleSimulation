@@ -1,27 +1,48 @@
 clear
 close all
 
+% Define simulation constants
+N_cycles = 50;
+
 makeVideo = true;
 continuousVideo = false;
 markersize = 45;
 
-% Define simulation constants
-N_iters = 30;
-half_cycle_iters = 500;
-iters = 2 * half_cycle_iters * N_iters + 1;
+%% Physical parameters
 
-% Set the parameters
+% Modify every experiment
+Q = 8000 * 10^-3 ; %mL/min
+
+% Fix parameters
+rho_mix = 1180; %kg/m^3
+T = 10.11; %s
+D = 6.35; % mm, tube diameter
+dp = 0.6; % mm, Particle diameter
+A = pi/4 * D^2; % mm^2
+mu_mix = 2.38; % Pa*S dynamic viscosity from Snook 2016
+
+v_avg = (Q * 16.67) / A * 10^-3; % m/s
+F_p_drag = 3 * pi * mu_mix * (dp * 10^-3) * v_avg;  % N
+
+dt = 0.01;     % [s] Time step for integration (adjust as needed)
+dt = dt / ((dp * 10^-3) / v_avg);
+
+half_cycle_iters = 500;
+iters = 2 * half_cycle_iters * N_cycles + 1;
+
+%% Define simulation constants
+
+% Set the parameters -- all non dimensional
 phi = 0.8;
 num_particles = 200;
 % num_particles = 100;
-d = 1;
+d = 1;   
 epsilon = d/2;
 
-mu = 1;        % Dynamic viscosity of the fluid
-F0 = 5;        % Magnitude of the contact force (adjust as needed)
-dt = 0.01;     % Time step for integration (adjust as needed)
-hydro_coeff = 3 * pi * mu * d;  % Hydrodynamic drag coefficient
-Vc_magnitude = 10 * d;
+% mu = 1;        % Dynamic viscosity of the fluid
+% hydro_coeff = 3 * pi * mu * d;  % Hydrodynamic drag coefficient
+F0 = 1;        % Magnitude of the contact force (adjust as needed)
+Vc_magnitude = 1.5; % Flow between 2 plates
 
 
 gamma0 = 5.0; % Strain Amplitude. Also the slope of the velocity profile
@@ -55,12 +76,9 @@ particle_x = rand(num_particles, 1) * box_width;
 % particle_y = rand(num_particles, 1) * box_height;
 particle_y = rand(num_particles, 1) * (box_height - d) + d/2;
 
-
 % Plot the particles as circles
-init_x = particle_x;
-init_y = particle_y;
-
-
+% init_x = particle_x;
+% init_y = particle_y;
 
 %% Particle motion
 active = zeros(iters,1);
@@ -68,9 +86,12 @@ plug_areas = zeros(iters,1);
 msd_x = zeros(iters,1);
 msd_y = zeros(iters,1);
 
+msd_x_cycle = zeros(N_cycles,1);
+msd_y_cycle = zeros(N_cycles,1);
+
 % Set up video writer
 if makeVideo
-    vidName = sprintf('Test_2DSimulation_Vc%02d_3rdLaw',Vc_magnitude);
+    vidName = sprintf('Test_2DSimulation_Q%03d_3rdLaw_nondim',Q*1000);
     vidObj = VideoWriter(vidName);
     vidObj.FrameRate = 15;  % Set the frame rate
     open(vidObj);
@@ -85,6 +106,12 @@ end
 % end
 
 for it = 1:iters
+    if mod(it, 2*half_cycle_iters) == 1  % Start of a new cycle
+        % Record the initial positions for the current cycle
+        init_x_cycle = particle_x;
+        init_y_cycle = particle_y;
+    end
+    
     if mod(floor((it - 1) / half_cycle_iters), 2) == 0
         Vc = Vc_magnitude;  % Positive for iterations
     else
@@ -116,11 +143,6 @@ for it = 1:iters
     
     row_ind = unique([row_ind_0;row_ind_1]);
     active(it) = length(row_ind);
-    
-    
-%     if active(it) == 0
-%         break
-%     end
     
 %     figure
 %     set(gcf, 'Position',  [100, 100, 1200, 400])
@@ -201,7 +223,8 @@ for it = 1:iters
                 end
 
                 % Contact force magnitude
-                F_contact = F0;
+%                 F_contact = F0;
+                F_contact = abs(R-particle_y(i)) * 6 / R;
 
                 % Apply forces to particle i
                 F_c_x(i) = F_c_x(i) + F_contact * n_ij_x;
@@ -221,19 +244,23 @@ for it = 1:iters
     
     for i = 1:num_particles
         % Compute background flow velocity at particle i using parabolic profile
-        u_inf_i_x = Vc * (1 - ((particle_y(i) - R) / R)^2);
+%         u_inf_i_x = Vc * (1 - ((particle_y(i) - R) / R)^2);
+        u_inf_i_x = Vc * particle_y(i) * (2 * R - particle_y(i)) / R^2;
         u_inf_i_y = 0; % No flow in y-direction
         
         % Calculate particle velocity from force balance
-        u_i_x = u_inf_i_x - (1 / hydro_coeff) * F_c_x(i);
-        u_i_y = u_inf_i_y - (1 / hydro_coeff) * F_c_y(i);
+%         u_i_x = u_inf_i_x - (1 / hydro_coeff) * F_c_x(i);
+%         u_i_y = u_inf_i_y - (1 / hydro_coeff) * F_c_y(i);
+        u_i_x = u_inf_i_x - F_c_x(i);
+        u_i_y = u_inf_i_y - F_c_y(i);
+        
         
         % Update particle positions
         particle_x(i) = particle_x(i) + u_i_x * dt;
         particle_y(i) = particle_y(i) + u_i_y * dt;
         
-        msd_x(it) = msd_x(it) + (u_i_x * dt)^2;
-        msd_y(it) = msd_y(it) + (u_i_y * dt)^2;
+%         msd_x(it) = msd_x(it) + (u_i_x * dt)^2;
+%         msd_y(it) = msd_y(it) + (u_i_y * dt)^2;
                 
         % No penetration boundary condition:
         if is_upbotwallHard
@@ -254,13 +281,21 @@ for it = 1:iters
         end
     end
     
-    msd_x(it) = msd_x(it) / num_particles;
-    msd_y(it) = msd_y(it) / num_particles;
-
+%     msd_x(it) = msd_x(it) + (particle_x - init_x)^2;
+%     msd_y(it) = msd_y(it) + (particle_y - init_y)^2;
+%     
+%     msd_x(it) = msd_x(it) / num_particles;
+%     msd_y(it) = msd_y(it) / num_particles;
     
     if mod(it, 2*half_cycle_iters) == 0 || it == 1
         [~, ~, ~, ~, p_area] = cal_grad_concentration(particle_x, particle_y, grid_size, sigma, Vc, box_height / 2, is_shearTimesConcent);
         plug_areas(it) = p_area;
+    end
+    
+        % At the end of the cycle (right before starting a new cycle), calculate MSD
+    if mod(it, 2*half_cycle_iters) == 0  % End of a cycle
+        msd_x_cycle(it / (2*half_cycle_iters)) = mean((particle_x - init_x_cycle).^2);
+        msd_y_cycle(it / (2*half_cycle_iters)) = mean((particle_y - init_y_cycle).^2);
     end
 end
 % Close video writer
@@ -269,17 +304,17 @@ if makeVideo
 end
 
 %%
-msd_x_cycle = zeros(N_iters,1);
-msd_y_cycle = zeros(N_iters,1);
 
-for n = 1:N_iters
-    startIdx = 1 + (n - 1) * 2 * half_cycle_iters;
-    endIdx = startIdx + 2 * half_cycle_iters;
-    
-    msd_x_cycle(n) = sum(msd_x(startIdx:endIdx));
-    msd_y_cycle(n) = sum(msd_y(startIdx:endIdx));
-end
+% 
+% for n = 1:N_cycles
+%     startIdx = 1 + (n - 1) * 2 * half_cycle_iters;
+%     endIdx = startIdx + 2 * half_cycle_iters;
+%     
+%     msd_x_cycle(n) = sum(msd_x(startIdx:endIdx));
+%     msd_y_cycle(n) = sum(msd_y(startIdx:endIdx));
+% end
 
 % plot(msd_x_cycle)
-
-% save(sprintf('./NoLubricationRes/Vc%d.mat',Vc_magnitude))
+if ~continuousVideo
+    save(sprintf('./NoLubricationRes/Q%d.mat',Q*1000))
+end
