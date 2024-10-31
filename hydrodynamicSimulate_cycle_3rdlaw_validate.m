@@ -2,23 +2,18 @@ clear
 close all
 
 % Define simulation constants
-tic
+N_cycles = 1;
 
-N_cycles = 10;
-
-makeVideo = true;
-continuousVideo = false;
+makeVideo = false;
+continuousVideo = true;
 markersize = 45;
 
 isLubrication = true;
 
-isLoadTestXY = true;
-savedata = false;
-
 %% Physical parameters
 
 % Modify every experiment
-Q = 8000 * 10^-3 ; %mL/min
+Q = 1000 * 10^-3 ; %mL/min
 
 % Fix parameters
 rho_mix = 1180; %kg/m^3
@@ -31,25 +26,27 @@ mu_mix = 2.38; % Pa*S dynamic viscosity from Snook 2016
 v_avg = (Q * 16.67) / A * 10^-3; % m/s
 F_p_drag = 3 * pi * mu_mix * (dp * 10^-3) * v_avg;  % N
 
-dt_exp = 0.001;     % [s] Time step for integration (adjust as needed)
-dt = dt_exp / ((dp * 10^-3) / v_avg);
+% dt = 0.0001;     % [s] Time step for integration (adjust as needed)
+dt = 1 * 10^-6;
+% dt = dt / ((dp * 10^-3) / v_avg);
 
-half_cycle_iters = round(5 / dt_exp);
-iters = 2 * half_cycle_iters * N_cycles + 1;
+% half_cycle_iters = 250;
+% iters = 2 * half_cycle_iters * N_cycles + 1;
+iters = 500000000;
 
 %% Define simulation constants
 
 % Set the parameters -- all non dimensional
 phi = 0.8;
-num_particles = 200;
+num_particles = 2;
 % num_particles = 100;
 d = 1;   
 epsilon = d/2;
 
 % mu = 1;        % Dynamic viscosity of the fluid
 % hydro_coeff = 3 * pi * mu * d;  % Hydrodynamic drag coefficient
-F0 = 1;        % Magnitude of the contact force (adjust as needed)
-Vc_magnitude = 1.5; % Flow between 2 plates
+F0 = 0;        % Magnitude of the contact force (adjust as needed)
+% Vc_magnitude = 0.01; % Flow between 2 plates
 
 
 gamma0 = 5.0; % Strain Amplitude. Also the slope of the velocity profile
@@ -75,36 +72,32 @@ box_width = (num_particles * pi * d) / (4 * aspect_ratio * phi);
 % Generate random positions for the particles
 particle_x = rand(num_particles, 1) * box_width;
 particle_y = rand(num_particles, 1) * (box_height - d) + d/2;
-% particle_y = rand(num_particles, 1) * box_height;
 
-if isLoadTestXY
-    load('test_xy_location.mat');
-end
+particle_x = [0; -2];
+particle_y = [0; 0.1];
+
+delta_x = zeros(iters / 1000,1);
+delta_y = zeros(iters / 1000,1);
+displace_x = zeros(iters / 1000,1);
+displace_y = zeros(iters / 1000,1);
 
 R = box_height / 2;
 
-% Plot the particles as circles
-% init_x = particle_x;
-% init_y = particle_y;
-
 %% Particle motion
-active = zeros(iters,1);
-plug_areas = zeros(iters,1);
-msd_x = zeros(iters,1);
-msd_y = zeros(iters,1);
+% active = zeros(iters,1);
+% plug_areas = zeros(iters,1);
+% msd_x = zeros(iters,1);
+% msd_y = zeros(iters,1);
 
-msd_x_cycle = zeros(N_cycles,1);
-msd_y_cycle = zeros(N_cycles,1);
+% msd_x_cycle = zeros(N_cycles,1);
+% msd_y_cycle = zeros(N_cycles,1);
+
 
 % Set up video writer
 if makeVideo
-    if isLubrication
-        vidName = sprintf('Test_2DSimulation_Q%03d_3rdLaw_nondim_lub',Q*1000);
-    else
-        vidName = sprintf('Test_2DSimulation_Q%03d_3rdLaw_nondim',Q*1000);
-    end
+    vidName = sprintf('Test_2DSimulation_Q%03d_3rdLaw_nondim_lub_validate',Q*1000);
     vidObj = VideoWriter(vidName);
-    vidObj.FrameRate = 10;  % Set the frame rate
+    vidObj.FrameRate = 15;  % Set the frame rate
     open(vidObj);
 end
 
@@ -115,27 +108,23 @@ end
 %     init_x = particle_x;
 %     init_y = particle_y;
 % end
+Vc_magnitude = 1 / R;
 
 for it = 1:iters
-    if mod(it, 2*half_cycle_iters) == 1  % Start of a new cycle
-        % Record the initial positions for the current cycle
-        init_x_cycle = particle_x;
-        init_y_cycle = particle_y;
+%     if mod(floor((it - 1) / half_cycle_iters), 2) == 0
+%         Vc = Vc_magnitude;  % Positive for iterations
+%     else
+%         Vc = -Vc_magnitude;  % Negative for iterations
+%     end
+    Vc = Vc_magnitude;
+    
+    particle_x_forward = 0 * particle_x;
+    
+    for i = 1:num_particles
+        particle_x_forward(i) = particle_x(i) + Vc * (1 - (particle_y(i) - R)^2/R^2) * dt;
     end
     
-    if mod(floor((it - 1) / half_cycle_iters), 2) == 0
-        Vc = Vc_magnitude;  % Positive for iterations
-    else
-        Vc = -Vc_magnitude;  % Negative for iterations
-    end
-%     
-%     particle_x_forward = 0 * particle_x;
-%     
-%     for i = 1:num_particles
-%         particle_x_forward(i) = particle_x(i) + Vc * (1 - (particle_y(i) - R)^2/R^2) * dt;
-%     end
-%     
-%     % Check Collision before shear
+    % Check Collision before shear
 %     D1 = pdist([particle_x,particle_y]);
 %     Dsq = squareform(D1);
 %     ind = find(Dsq < d & Dsq ~= 0);
@@ -174,6 +163,7 @@ for it = 1:iters
         else
             condition = mod(it, 2*half_cycle_iters) == 0 || it == 1;
         end
+
             
         if condition
             scatter(particle_x, particle_y, markersize);
@@ -184,7 +174,7 @@ for it = 1:iters
             axis equal
             % scatter(particle_x, particle_y, markersize);
     %         xlim([0 2*box_width]);
-            xlim([-box_width 3 * box_width]);
+            xlim([-15 15]);
             ylim([0 box_height]);
             xlabel('X position (units)');
             ylabel('Y position (units)');
@@ -202,56 +192,58 @@ for it = 1:iters
 %         clf(f)
     end
     
-    D1 = pdist([particle_x,particle_y]);
-    Dsq = squareform(D1);
-    
-    total_FCX = 0;
-    total_FCY = 0;
-    
+ %% Contact Force
+ 
+%     D1 = pdist([particle_x,particle_y]);
+%     Dsq = squareform(D1);
+%     
+%     
     F_c_x = zeros(num_particles, 1);
     F_c_y = zeros(num_particles, 1);
-    % Loop over each unique pair of particles to avoid double counting
-    for i = 1:num_particles-1
-        for j = i+1:num_particles
-            x_ij = Dsq(i, j);
-            h_ij = x_ij - d;
-
-            % Check for overlap
-            if h_ij < 2 * 10^-6 * d
-                % Compute distance components
-                dx = particle_x(j) - particle_x(i);
-                dy = particle_y(j) - particle_y(i);
-
-                % Avoid division by zero
-                if x_ij == 0
-                    n_ij_x = 0;
-                    n_ij_y = 0;
-                else
-                    % Unit vector from particle i to particle j
-                    n_ij_x = dx / x_ij;
-                    n_ij_y = dy / x_ij;
-                end
-
-                % Contact force magnitude
+%     % Loop over each unique pair of particles to avoid double counting
+%     for i = 1:num_particles-1
+%         for j = i+1:num_particles
+%             x_ij = Dsq(i, j);
+%             h_ij = x_ij - d;
+% 
+%             % Check for overlap
+%             if h_ij < 0
+%                 % Compute distance components
+%                 dx = particle_x(j) - particle_x(i);
+%                 dy = particle_y(j) - particle_y(i);
+% 
+%                 % Avoid division by zero
+%                 if x_ij == 0
+%                     n_ij_x = 0;
+%                     n_ij_y = 0;
+%                 else
+%                     % Unit vector from particle i to particle j
+%                     n_ij_x = dx / x_ij;
+%                     n_ij_y = dy / x_ij;
+%                 end
+% 
+%                 % Contact force magnitude
 %                 F_contact = F0;
-                F_contact = abs(R-particle_y(i)) * 6 / R;
-
-                % Apply forces to particle i
-                F_c_x(i) = F_c_x(i) + F_contact * n_ij_x;
-                F_c_y(i) = F_c_y(i) + F_contact * n_ij_y;
-
-                % Apply equal and opposite forces to particle j
-                F_c_x(j) = F_c_x(j) - F_contact * n_ij_x;
-                F_c_y(j) = F_c_y(j) - F_contact * n_ij_y;
-            end
-        end
-    end
-
-%     total_F_c_x = sum(F_c_x);
-%     total_F_c_y = sum(F_c_y);
+% %                 F_contact = abs(R-particle_y(i)) * 6 / R;
+% 
+%                 % Apply forces to particle i
+%                 F_c_x(i) = F_c_x(i) + F_contact * n_ij_x;
+%                 F_c_y(i) = F_c_y(i) + F_contact * n_ij_y;
+% 
+%                 % Apply equal and opposite forces to particle j
+%                 F_c_x(j) = F_c_x(j) - F_contact * n_ij_x;
+%                 F_c_y(j) = F_c_y(j) - F_contact * n_ij_y;
+%             end
+%         end
+%     end
+% 
+%     total_F_c_x(it) = sum(abs(F_c_x));
+%     total_F_c_y(it) = sum(abs(F_c_y));
+    
 %     fprintf('Total contact force in x-direction: %e\n', total_F_c_x);
 %     fprintf('Total contact force in y-direction: %e\n', total_F_c_y);
 
+%% Lubrication Force
     if isLubrication
         N = num_particles;
         % Initialize A and b
@@ -264,7 +256,7 @@ for it = 1:iters
             idx_i_y = 2*i;
 
             % Background flow velocity at particle i
-            u_inf_i_x = Vc * particle_y(i) * (2 * R - particle_y(i)) / R^2;
+            u_inf_i_x = Vc * particle_y(i);
             u_inf_i_y = 0;
 
             % Hydrodynamic drag coefficients
@@ -288,8 +280,8 @@ for it = 1:iters
 
                 h_ij = x_ij - d;
 
-                if h_ij > 0 && h_ij < epsilon % epsilon is a small cutoff value
-                    % Lubrication coefficient
+                if h_ij > 0 && h_ij <= epsilon % epsilon is a small cutoff value
+                    % Lubrication coefficient 
                     L_ij = 1 / (8 * h_ij);
 
                     % Unit vector
@@ -328,7 +320,6 @@ for it = 1:iters
                 end
             end
         end
-        A = sparse(A);
         u = A \ b;
 
         % Extract velocities
@@ -342,16 +333,28 @@ for it = 1:iters
             % Update particle positions
             particle_x(i) = particle_x(i) + u_i_x * dt;
             particle_y(i) = particle_y(i) + u_i_y * dt;
+            
+            if mod(it, 1000) == 0
+                displace_x(it / 1000) = u_i_x * dt;
+                displace_y(it / 1000) = u_i_y * dt;
+            end
+
+%             displace_x(it) = u_i_x * dt;
+%             displace_y(it) = u_i_y * dt;
 
             % Apply boundary conditions...
-            if is_upbotwallHard
-                if particle_y(i) >= box_height - d/2
-                    particle_y(i) = box_height - d/2;
-                elseif particle_y(i) < d/2
-                    particle_y(i) = d/2;
-                end
-            end
+%             if is_upbotwallHard
+%                 if particle_y(i) >= box_height - d/2
+%                     particle_y(i) = box_height - d/2;
+%                 elseif particle_y(i) < d/2
+%                     particle_y(i) = d/2;
+%                 end
+%             end
+%             if particle_y(i) < 0
+%                 particle_y(i) = 0;
+%             end
         end
+               
     else
         for i = 1:num_particles
             % Compute background flow velocity at particle i using parabolic profile
@@ -391,56 +394,14 @@ for it = 1:iters
         end        
     end
     
-    
-%     msd_x(it) = msd_x(it) + (particle_x - init_x)^2;
-%     msd_y(it) = msd_y(it) + (particle_y - init_y)^2;
-%     
-%     msd_x(it) = msd_x(it) / num_particles;
-%     msd_y(it) = msd_y(it) / num_particles;
-    
-    if mod(it, 2*half_cycle_iters) == 0 || it == 1
-        [~, ~, ~, ~, p_area] = cal_grad_concentration(particle_x, particle_y, grid_size, sigma, Vc, box_height / 2, is_shearTimesConcent);
-        plug_areas(it) = p_area;
+    if mod(it, 1000) == 0
+        delta_x(it / 1000) = particle_x(1) - particle_x(2);
+        delta_y(it / 1000) = particle_y(1) - particle_y(2);
     end
-    
-        % At the end of the cycle (right before starting a new cycle), calculate MSD
-    if mod(it, 2*half_cycle_iters) == 0  % End of a cycle
-        msd_x_cycle(it / (2*half_cycle_iters)) = mean((particle_x - init_x_cycle).^2);
-        msd_y_cycle(it / (2*half_cycle_iters)) = mean((particle_y - init_y_cycle).^2);
-        toc
-        
-        if isLoadTestXY
-            benchmark_data = load('test_cycle1_dt10E-3.mat');
-            bench_x = benchmark_data.particle_x;
-            bench_y = benchmark_data.particle_y;
-            
-            isEqual = isequal(particle_x, bench_x) & isequal(particle_y, bench_y)
-        end
-    end
-    
-    
 end
 % Close video writer
 if makeVideo
     close(vidObj);
 end
 
-%%
-
-% 
-% for n = 1:N_cycles
-%     startIdx = 1 + (n - 1) * 2 * half_cycle_iters;
-%     endIdx = startIdx + 2 * half_cycle_iters;
-%     
-%     msd_x_cycle(n) = sum(msd_x(startIdx:endIdx));
-%     msd_y_cycle(n) = sum(msd_y(startIdx:endIdx));
-% end
-
-% plot(msd_x_cycle)
-if ~continuousVideo && savedata
-    if ~isLubrication
-        save(sprintf('./NoLubricationRes/Q%d.mat',Q*1000))
-    else
-        save(sprintf('./LubricationRes/Q%d.mat',Q*1000))
-    end
-end
+plot(delta_x, delta_y)
