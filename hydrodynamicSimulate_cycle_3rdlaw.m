@@ -204,12 +204,77 @@ for it = 1:iters
     
     D1 = pdist([particle_x,particle_y]);
     Dsq = squareform(D1);
+   
+%% Matrix to get interaction first
     
+%     % Compute surface-to-surface distances
+%     h_matrix = Dsq - d;
+% 
+%     % Define overlap condition
+%     overlap_condition = (h_matrix < 2e-6 * d);
+% 
+%     % Get indices of overlapping particle pairs (upper triangle to avoid duplicates)
+%     [i_indices, j_indices] = find(triu(overlap_condition, 1));
+% 
+%     % Number of interactions
+%     num_interactions = length(i_indices);
+% 
+%     % Initialize arrays to store force contributions for each interaction
+%     F_c_x_i = zeros(num_interactions, 1);
+%     F_c_y_i = zeros(num_interactions, 1);
+%     F_c_x_j = zeros(num_interactions, 1);
+%     F_c_y_j = zeros(num_interactions, 1);
+%     
+%     % Use a parfor loop to compute forces for each interaction
+%     for k = 1:num_interactions
+%         i = i_indices(k);
+%         j = j_indices(k);
+% 
+%         % Compute distance components
+%         dx = particle_x(j) - particle_x(i);
+%         dy = particle_y(j) - particle_y(i);
+%         x_ij = sqrt(dx^2 + dy^2);
+% 
+%         % Avoid division by zero
+%         if x_ij == 0
+%             n_ij_x = 0;
+%             n_ij_y = 0;
+%         else
+%             % Unit vector from particle i to particle j
+%             n_ij_x = dx / x_ij;
+%             n_ij_y = dy / x_ij;
+%         end
+% 
+%         % Contact force magnitude (example function)
+%         F_contact = abs(R - particle_y(i)) * 6 / R;
+% 
+%         % Compute force components for particle i
+%         F_c_x_i(k) = F_contact * n_ij_x;
+%         F_c_y_i(k) = F_contact * n_ij_y;
+% 
+%         % Compute force components for particle j (equal and opposite)
+%         F_c_x_j(k) = -F_contact * n_ij_x;
+%         F_c_y_j(k) = -F_contact * n_ij_y;
+%     end
+%     F_c_x = zeros(num_particles, 1);
+%     F_c_y = zeros(num_particles, 1);
+% 
+%     % Accumulate forces on particles using accumarray
+%     F_c_x = F_c_x + accumarray(i_indices, F_c_x_i, [num_particles, 1]);
+%     F_c_y = F_c_y + accumarray(i_indices, F_c_y_i, [num_particles, 1]);
+%     F_c_x = F_c_x + accumarray(j_indices, F_c_x_j, [num_particles, 1]);
+%     F_c_y = F_c_y + accumarray(j_indices, F_c_y_j, [num_particles, 1]);
+% 
+%     tmpFcx = F_c_x;
+%     tmpFcy = F_c_y;
+
+%% Iterate all pairs
     total_FCX = 0;
     total_FCY = 0;
     
     F_c_x = zeros(num_particles, 1);
     F_c_y = zeros(num_particles, 1);
+    
     % Loop over each unique pair of particles to avoid double counting
     for i = 1:num_particles-1
         for j = i+1:num_particles
@@ -251,7 +316,7 @@ for it = 1:iters
 %     total_F_c_y = sum(F_c_y);
 %     fprintf('Total contact force in x-direction: %e\n', total_F_c_x);
 %     fprintf('Total contact force in y-direction: %e\n', total_F_c_y);
-
+%%
     if isLubrication
         N = num_particles;
         % Initialize A and b
