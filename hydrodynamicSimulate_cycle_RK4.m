@@ -11,9 +11,9 @@ makeVideo = true;
 continuousVideo = false;
 markersize = 45;
 
-isLubrication = true;
+isLubrication = false;
 
-isLoadTestXY = false;
+isLoadTestXY = true;
 savedata = true;
 
 %% Physical parameters
@@ -79,14 +79,14 @@ particle_y = rand(num_particles, 1) * (box_height - d) + d/2;
 % particle_y = rand(num_particles, 1) * box_height;
 
 if isLoadTestXY
-    load('test_xy_location.mat');
+    load('pack_xy_jiter.mat');
 end
 
 R = box_height / 2;
 
 % Plot the particles as circles
-% init_x = particle_x;
-% init_y = particle_y;
+init_x = particle_x;
+init_y = particle_y;
 
 %% Particle motion
 active = zeros(iters,1);
@@ -96,13 +96,16 @@ msd_y = zeros(iters,1);
 
 msd_x_cycle = zeros(N_cycles,1);
 msd_y_cycle = zeros(N_cycles,1);
+particle_x_cycle = cell(N_cycles,1);
+particle_y_cycle = cell(N_cycles,1);
+
 
 % Set up video writer
 if makeVideo
     if isLubrication
-        vidName = sprintf('Test_2DSimulation_Q%03d_3rdLaw_nondim_lub',Q*1000);
+        vidName = sprintf('2DSimulation_Q%03d_3rdLaw_nondim_lub',Q*1000);
     else
-        vidName = sprintf('Test_2DSimulation_Q%03d_3rdLaw_nondim',Q*1000);
+        vidName = sprintf('2DSimulation_Q%03d_3rdLaw_nondim',Q*1000);
     end
     vidObj = VideoWriter(vidName);
     vidObj.FrameRate = 10;  % Set the frame rate
@@ -247,15 +250,17 @@ for it = 1:iters
     if mod(it, 2*half_cycle_iters) == 0  % End of a cycle
         msd_x_cycle(it / (2*half_cycle_iters)) = mean((particle_x - init_x_cycle).^2);
         msd_y_cycle(it / (2*half_cycle_iters)) = mean((particle_y - init_y_cycle).^2);
+        particle_x_cycle{it/(2*half_cycle_iters)} = particle_x;
+        particle_y_cycle{it/(2*half_cycle_iters)} = particle_y;
         toc
         
-        if isLoadTestXY
-            benchmark_data = load('test_cycle1_dt10E-3.mat');
-            bench_x = benchmark_data.particle_x;
-            bench_y = benchmark_data.particle_y;
-            
-            isEqual = isequal(particle_x, bench_x) & isequal(particle_y, bench_y)
-        end
+%         if isLoadTestXY
+%             benchmark_data = load('test_cycle1_dt10E-3.mat');
+%             bench_x = benchmark_data.particle_x;
+%             bench_y = benchmark_data.particle_y;
+%             
+%             isEqual = isequal(particle_x, bench_x) & isequal(particle_y, bench_y)
+%         end
     end
     
     
@@ -279,7 +284,7 @@ end
 % plot(msd_x_cycle)
 if ~continuousVideo && savedata
     if ~isLubrication
-        save(sprintf('./10E-2dt/RK4/NoLubricationRes/Q%d_run%d.mat',Q*1000,runNum))
+        save(sprintf('./10E-2dt/RK4/PackContactOnly/Q%d_run%d.mat',Q*1000,runNum))
     else
         save(sprintf('./10E-2dt/RK4/LubricationRes/Q%d_run%d.mat',Q*1000, runNum))
     end
