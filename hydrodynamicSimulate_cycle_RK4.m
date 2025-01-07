@@ -11,7 +11,7 @@ makeVideo = true;
 continuousVideo = false;
 markersize = 45;
 
-isLubrication = false;
+isLubrication = true;
 
 isLoadTestXY = true;
 savedata = true;
@@ -93,11 +93,15 @@ active = zeros(iters,1);
 plug_areas = zeros(iters,1);
 msd_x = zeros(iters,1);
 msd_y = zeros(iters,1);
+n_contact = zeros(iters,1);
+n_lubricate = zeros(iters,1);
 
 msd_x_cycle = zeros(N_cycles,1);
 msd_y_cycle = zeros(N_cycles,1);
 particle_x_cycle = cell(N_cycles,1);
 particle_y_cycle = cell(N_cycles,1);
+n_contact_cycle = zeros(N_cycles,1);
+n_lubricate_cycle = zeros(N_cycles,1);
 
 
 % Set up video writer
@@ -205,36 +209,37 @@ for it = 1:iters
     %     end
     
     %% RK 4
-    
     % RK4 steps
-    u1 = compute_u(x_n, y_n, params);
+    [u1, num_contact_k1, num_lubrication_k1] = compute_u(x_n, y_n, params);
     k1_x = u1(1:2:end);
     k1_y = u1(2:2:end);
     
     x_k2 = x_n + (dt/2) * k1_x;
     y_k2 = y_n + (dt/2) * k1_y;
-    u2 = compute_u(x_k2, y_k2, params);
+    [u2, num_contact_k2, num_lubrication_k2] = compute_u(x_k2, y_k2, params);
     k2_x = u2(1:2:end);
     k2_y = u2(2:2:end);
     
     x_k3 = x_n + (dt/2) * k2_x;
     y_k3 = y_n + (dt/2) * k2_y;
-    u3 = compute_u(x_k3, y_k3, params);
+    [u3, num_contact_k3, num_lubrication_k3] = compute_u(x_k3, y_k3, params);
     k3_x = u3(1:2:end);
     k3_y = u3(2:2:end);
     
     x_k4 = x_n + dt * k3_x;
     y_k4 = y_n + dt * k3_y;
-    u4 = compute_u(x_k4, y_k4, params);
+    [u4, num_contact_k4, num_lubrication_k4] = compute_u(x_k4, y_k4, params);
     k4_x = u4(1:2:end);
     k4_y = u4(2:2:end);
-    
     particle_x = x_n + (dt/6) * (k1_x + 2*k2_x + 2*k3_x + k4_x);
     particle_y = y_n + (dt/6) * (k1_y + 2*k2_y + 2*k3_y + k4_y);
     
     % Vectorized boundary enforcement
     particle_y = min(max(particle_y, d/2), box_height - d/2);
     
+    total_contact_pairs = (num_contact_k1 + num_contact_k2 + num_contact_k3 + num_contact_k4) / 4;
+    total_lubrication_pairs = (num_lubrication_k1 + num_lubrication_k2 + num_lubrication_k3 + num_lubrication_k4) / 4;
+
     %     msd_x(it) = msd_x(it) + (particle_x - init_x)^2;
     %     msd_y(it) = msd_y(it) + (particle_y - init_y)^2;
     %
@@ -252,6 +257,8 @@ for it = 1:iters
         msd_y_cycle(it / (2*half_cycle_iters)) = mean((particle_y - init_y_cycle).^2);
         particle_x_cycle{it/(2*half_cycle_iters)} = particle_x;
         particle_y_cycle{it/(2*half_cycle_iters)} = particle_y;
+        n_contact_cycle(it/(2*half_cycle_iters)) = total_contact_pairs;
+        n_lubricate_cycle(it/(2*half_cycle_iters)) = total_lubrication_pairs;
         toc
         
 %         if isLoadTestXY

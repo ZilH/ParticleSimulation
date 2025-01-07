@@ -1,4 +1,4 @@
-function u = compute_u(particle_x, particle_y, params)
+function [u, num_contact_pairs, num_lubrication_pairs] = compute_u(particle_x, particle_y, params)
     % Extract parameters
     N = params.num_particles;
     num_particles = params.num_particles;
@@ -7,20 +7,30 @@ function u = compute_u(particle_x, particle_y, params)
     d = params.d;
     epsilon = params.epsilon;
     isLubrication = params.isLubrication;
-    
-    D1 = pdist([particle_x,particle_y]);
+
+    % Initialize counters for pair interactions
+    num_contact_pairs = 0;
+    num_lubrication_pairs = 0;
+
+    % Compute pairwise distances
+    D1 = pdist([particle_x, particle_y]);
     Dsq = squareform(D1);
 
+    % Initialize contact forces
     F_c_x = zeros(N, 1);
     F_c_y = zeros(N, 1);
-    % Include any other parameters or forces needed
+
+    % Loop over particle pairs for contact forces
     for i = 1:num_particles-1
         for j = i+1:num_particles
             x_ij = Dsq(i, j);
             h_ij = x_ij - d;
 
-            % Check for overlap
+            % Check for contact force
             if h_ij < 2 * 10^-6 * d
+                % Count the contact pair
+                num_contact_pairs = num_contact_pairs + 1;
+
                 % Compute distance components
                 dx = particle_x(j) - particle_x(i);
                 dy = particle_y(j) - particle_y(i);
@@ -36,8 +46,7 @@ function u = compute_u(particle_x, particle_y, params)
                 end
 
                 % Contact force magnitude
-%                 F_contact = F0;
-                F_contact = abs(R-particle_y(i)) * 6 / R;
+                F_contact = abs(R - particle_y(i)) * 6 / R;
 
                 % Apply forces to particle i
                 F_c_x(i) = F_c_x(i) + F_contact * n_ij_x;
@@ -50,7 +59,6 @@ function u = compute_u(particle_x, particle_y, params)
         end
     end
 
-
     % Initialize A and b
     A = zeros(2*N, 2*N);
     b = zeros(2*N, 1);
@@ -61,7 +69,6 @@ function u = compute_u(particle_x, particle_y, params)
         idx_i_y = 2*i;
 
         % Background flow velocity at particle i
-%         u_inf_i_x = Vc * particle_y(i) * (1 - ((particle_y(i) - R)/R)^2);
         u_inf_i_x = Vc * particle_y(i) * (2 * R - particle_y(i)) / R^2;
         u_inf_i_y = 0;
 
@@ -76,9 +83,9 @@ function u = compute_u(particle_x, particle_y, params)
         b(idx_i_x) = K * u_inf_i_x - F_c_x(i);
         b(idx_i_y) = K * u_inf_i_y - F_c_y(i);
     end
-    
+
     if isLubrication
-    % Loop over unique particle pairs for lubrication forces
+        % Loop over unique particle pairs for lubrication forces
         for i = 1:N-1
             for j = i+1:N
                 dx = particle_x(j) - particle_x(i);
@@ -88,6 +95,9 @@ function u = compute_u(particle_x, particle_y, params)
                 h_ij = x_ij - d;
 
                 if h_ij > 2*10^-6 && h_ij <= epsilon  % Lubrication cutoff
+                    % Count the lubrication pair
+                    num_lubrication_pairs = num_lubrication_pairs + 1;
+
                     % Lubrication coefficient
                     L_ij = 1 / (8 * h_ij);
 
